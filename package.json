@@ -1,0 +1,42 @@
+{
+  "name": "yt-chat-signaler",
+  "version": "0.1.0",
+  "description": "A client for connecting to the YouTube Live Chat signaler service to receive real-time events.",
+  "keywords": [
+    "youtube",
+    "chat",
+    "livechat",
+    "stream",
+    "signaler",
+    "youtube-api"
+  ],
+  "author": {
+    "name": "ZackSB",
+    "email": "zaacksb@users.noreply.github.com",
+    "url": "https://github.com/zaacksb"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/zaacksb/yt-chat-signaler#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zaacksb/yt-chat-signaler.git"
+  },
+  "bugs": "https://github.com/zaacksb/yt-chat-signaler/issues",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist/* && tsx scripts/build.ts && tsc",
+    "test": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.19.11",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
