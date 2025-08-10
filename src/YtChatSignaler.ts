@@ -115,7 +115,7 @@ type ToTuples<T extends Record<string, any>> = {
  * A client for connecting to the YouTube Live Chat signaler
  * This client manages the connection, reconnection, and credential refreshing process
  */
-export class Client extends EventEmitter<ToTuples<ClientEvents>> {
+export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
     private readonly userAgent: string
     private readonly apiKey: string
     private readonly maxReconnectAttempts: number

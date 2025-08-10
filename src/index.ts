@@ -1,7 +1,7 @@
-import { Client } from './Client';
-export { Client } from './Client';
+import { YtChatSignaler } from './YtChatSignaler';
+export { YtChatSignaler } from './YtChatSignaler';
 export * from './youtube/events';
 
 export default {
-	Client
+	YtChatSignaler
 };
