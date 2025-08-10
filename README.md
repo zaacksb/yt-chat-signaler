@@ -23,7 +23,7 @@ npm install yt-chat-signaler
 Here's a simple example of how to connect to a YouTube live chat and listen for events.
 
 ```javascript
-import { YtChatSignaler } from './YtChatSignaler';
+import { YtChatSignaler } from "yt-chat-signaler";
 
 // The video ID of the YouTube live stream.
 const videoId = 'YOUR_YOUTUBE_LIVE_VIDEO_ID';
