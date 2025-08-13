@@ -41,7 +41,7 @@ client.on('data', ({ data, chatData }) => {
   // This is where you would parse the 'data' payload to extract chat messages.
 });
 
-client.on('error', (error) => {
+client.on('connectionError', (error) => {
   console.error('An error occurred:', error);
 });
 
@@ -84,7 +84,7 @@ The client is an `EventEmitter` and will emit various events to notify you about
 -   **`reconnecting`**: `(payload: { attempts: number, waitTime: number })`
     -   Emitted when the client is attempting to reconnect after a disconnection.
 
--   **`error`**: `(error: Error)`
+-   **`connectionError`**: `(error: Error)`
     -   Emitted when a connection error occurs or when the maximum number of reconnection attempts is reached.
 
 -   **`part`**: `(chatData: Chat)`

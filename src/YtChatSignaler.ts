@@ -97,7 +97,7 @@ export type ConnectionEvents = {
 
 export type OtherEvents = {
     ircMessage: [ircMessage: {}]
-    error: [error: Error]
+    connectionError: [error: Error]
 }
 
 export type ChatEvents = {
@@ -138,9 +138,9 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
         this.maxReconnectWaitMs = opts?.maxReconnectWaitMs ?? MAX_RECONNECT_WAIT_MS
     }
 
-    
-     // Starts the client and initiates connections to the specified chats
-     
+
+    // Starts the client and initiates connections to the specified chats
+
     public async start() {
         for (const chatId of this.channelsPendingJoin) {
             this.join(chatId)
@@ -218,11 +218,11 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
             return
         }
 
-        this.emit('error', error)
+        this.emit('connectionError', error)
 
         // Stop trying if max attempts are reached (and not infinite)
         if (this.maxReconnectAttempts > 0 && chatData.reconnectAttempts >= this.maxReconnectAttempts) {
-            this.emit('error', new Error(`Failed to connect to ${chatId} after ${this.maxReconnectAttempts} attempts.`))
+            this.emit('connectionError', new Error(`Failed to connect to ${chatId} after ${this.maxReconnectAttempts} attempts.`))
             this.stop(chatId)
             return
         }
@@ -245,9 +245,9 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
         }
     }
 
-    
-     // Step 1: Choose the best server to connect to
-     
+
+    // Step 1: Choose the best server to connect to
+
     private async chooseServer(chatId: string) {
         const chatData = this.chats.get(chatId)
         if (!chatData) throw new Error('Chat data not found for chooseServer')
@@ -282,9 +282,9 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
         })
     }
 
-    
+
     // Step 2: Get the Session ID (SID) for the connection
-     
+
     private async getSID(chatId: string) {
         const chatData = this.chats.get(chatId)
         if (!chatData || !chatData.gsessionid) throw new Error('gsessionid not found for getSID')
@@ -334,9 +334,9 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
         })
     }
 
-    
+
     // Step 3: Start long-polling to listen for chat events
-     
+
     private async listen(chatId: string): Promise<void> {
         const chatData = this.chats.get(chatId)
         if (!chatData || !chatData.SID || !chatData.gsessionid) {
@@ -386,8 +386,7 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
 
             if (done) {
                 // If the loop finishes, the connection was closed by the server
-                this.handleConnectionError(chatId, new Error("Stream closed by server."))
-                break
+                throw new Error("Stream closed by server.");
             }
 
             buffer += decoder.decode(value)
@@ -395,9 +394,9 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
         }
     }
 
-    
-     // Processes the raw buffer from the stream, handling chunked messages
-     
+
+    // Processes the raw buffer from the stream, handling chunked messages
+
     private processBuffer(buffer: string, chatId: string): string {
         while (true) {
             const jsonStartIndex = buffer.indexOf('[')
@@ -421,9 +420,9 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
         }
     }
 
-    
+
     // Parses a single message JSON and emits the appropriate event
-     
+
     private handleMessage(jsonStr: string, chatId: string, messageLength: number) {
         const chatData = this.chats.get(chatId)
         if (!chatData) return
@@ -448,9 +447,9 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
         }
     }
 
-    
-     // Starts a timer to periodically refresh the connection credentials
-     
+
+    // Starts a timer to periodically refresh the connection credentials
+
     private startCredentialRefresh(chatId: string) {
         const chatData = this.chats.get(chatId)
         if (!chatData || chatData.refreshInterval) return
@@ -478,14 +477,14 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
                     chatData: currentChatData
                 })
             } catch (error) {
-                this.emit('error', new Error(`Failed to refresh credentials for ${chatId}: ${error}`))
+                this.emit('connectionError', new Error(`Failed to refresh credentials for ${chatId}: ${error}`))
             }
         }, REFRESH_INTERVAL_MS)
     }
 
-    
+
     // Generates a random string required by the YouTube API
-     
+
     private randomZX() {
         return Math.floor(2147483648 * Math.random()).toString(36) +
             Math.abs(Math.floor(2147483648 * Math.random()) ^ Date.now()).toString(36)
