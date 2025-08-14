@@ -48,6 +48,7 @@ type Chat = {
     AID: number
     credsToken: string
     reconnectAttempts: number
+    rpcConnections: number
     refreshInterval?: ReturnType<typeof setInterval>
 }
 
@@ -93,6 +94,7 @@ export type ConnectionEvents = {
     connected: Chat
     // Emitted on a PING from the server
     ping: { tms: any, chatData: Chat }
+    resumingConnection: {chatId: string, attempts: number, chatData: Chat}
 }
 
 export type OtherEvents = {
@@ -181,6 +183,7 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
             SID: '',
             credsToken: '',
             reconnectAttempts: 0,
+            rpcConnections: 0
         }
         this.chats.set(chatId, chatData)
 
@@ -337,12 +340,19 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
 
     // Step 3: Start long-polling to listen for chat events
 
-    private async listen(chatId: string): Promise<void> {
-        const chatData = this.chats.get(chatId)
-        if (!chatData || !chatData.SID || !chatData.gsessionid) {
-            throw new Error('SID or gsessionid not found for listen')
-        }
+  private async listen(chatId: string): Promise<void> {
+    const chatData = this.chats.get(chatId);
+    if (!chatData || !chatData.SID || !chatData.gsessionid) {
+        return this.handleConnectionError(chatId, new Error('SID or gsessionid not found for listen'));
+    }
 
+   // Clear any previous refresh interval to avoid duplicates
+    if (chatData.refreshInterval) {
+        clearInterval(chatData.refreshInterval);
+        chatData.refreshInterval = undefined;
+    }
+
+    try {
         const params = {
             'VER': '8',
             'gsessionid': chatData.gsessionid,
@@ -354,45 +364,74 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
             't': '1',
             'CI': '0',
             'key': this.apiKey
-        }
-        const url = `${BASE_URL}?${new URLSearchParams(params)}`
+        };
+        const url = `${BASE_URL}?${new URLSearchParams(params)}`;
 
         const headers = {
             ...this.createBaseHeaders(),
             "accept": "text/event-stream",
-            "accept-language": "pt-BR,ptq=0.9,en-USq=0.8,enq=0.7",
-        }
+            "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        };
 
-        chatData.AID++
-        const response = await fetch(url, { method: "GET", headers })
+        chatData.AID++;
+        const response = await fetch(url, { method: "GET", headers });
 
         if (!response.ok || !response.body) {
-            throw new Error(`Listen request failed: ${response.statusText}`)
+            // An error in the initial request should also trigger a full reconnection
+            throw new Error(`Listen request failed: ${response.status} ${response.statusText}`);
         }
+        
+        this.startCredentialRefresh(chatId); 
 
-        this.startCredentialRefresh(chatId)
-
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ""
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
         while (true) {
-            if (!this.chats.has(chatId)) { // Stop if chat was removed
-                reader.cancel()
-                break
+            if (!this.chats.has(chatId)) { // stop loop if chat is removed
+                reader.cancel();
+                break;
             }
 
-            const { done, value } = await reader.read()
+            const { done, value } = await reader.read();
 
             if (done) {
-                // If the loop finishes, the connection was closed by the server
-                throw new Error("Stream closed by server.");
+               // exit the loop for simple reconnection with the same credentials
+                break;
             }
 
-            buffer += decoder.decode(value)
-            buffer = this.processBuffer(buffer, chatId)
+            buffer += decoder.decode(value);
+            buffer = this.processBuffer(buffer, chatId);
         }
+
+        if (chatData.refreshInterval) {
+            clearInterval(chatData.refreshInterval);
+            chatData.refreshInterval = undefined;
+        }
+
+        if (chatData.rpcConnections >= 4) {
+            chatData.rpcConnections = 0; 
+            this.connect(chatId); 
+        } else {
+            chatData.rpcConnections++;
+            this.listen(chatId); 
+            this.emit('resumingConnection', { 
+                chatId, 
+                attempts: chatData.rpcConnections, 
+                chatData 
+            });
+        }
+
+    } catch (error) {        
+        const currentChatData = this.chats.get(chatId);
+        if (currentChatData?.refreshInterval) {
+            clearInterval(currentChatData.refreshInterval);
+            currentChatData.refreshInterval = undefined;
+        }
+        
+        this.handleConnectionError(chatId, error as Error);
     }
+}
 
 
     // Processes the raw buffer from the stream, handling chunked messages
@@ -456,7 +495,7 @@ export class YtChatSignaler extends EventEmitter<ToTuples<ClientEvents>> {
 
         chatData.refreshInterval = setInterval(async () => {
             const currentChatData = this.chats.get(chatId)
-            if (!currentChatData || !currentChatData.running) {
+            if (!currentChatData || !currentChatData.running || chatData.rpcConnections >= 4) {
                 if (currentChatData?.refreshInterval) clearInterval(currentChatData.refreshInterval)
                 return
             }
